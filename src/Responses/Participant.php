@@ -16,7 +16,7 @@ use Einvoicing\Support\Data;
 final readonly class Participant
 {
     /**
-     * @param  list<array<string, mixed>>  $capabilities  The document types they accept.
+     * @param  list<Capability>  $capabilities  The document types they accept.
      * @param  array<string, mixed>|null  $directory
      */
     public function __construct(
@@ -37,20 +37,27 @@ final readonly class Participant
             scheme: Data::string($data, 'scheme'),
             identifier: Data::string($data, 'identifier'),
             registered: Data::bool($data, 'registered'),
-            capabilities: Data::maps($data, 'capabilities'),
+            capabilities: array_map(
+                static fn (array $capability): Capability => Capability::fromArray($capability),
+                Data::maps($data, 'capabilities'),
+            ),
             directory: Data::nullableMap($data, 'directory'),
             checkedAt: Data::string($data, 'checked_at'),
         );
     }
 
-    /** Does this participant accept a given document type identifier? */
+    /**
+     * Does this participant accept a given document type?
+     *
+     * Takes a full Peppol document type identifier, or any distinctive part
+     * of one, so `Invoice-2::Invoice` matches without pasting the whole
+     * `urn:oasis:…` string.
+     */
     public function accepts(string $documentType): bool
     {
         foreach ($this->capabilities as $capability) {
-            foreach ($capability as $value) {
-                if (is_string($value) && str_contains($value, $documentType)) {
-                    return true;
-                }
+            if (str_contains($capability->documentTypeId, $documentType)) {
+                return true;
             }
         }
 

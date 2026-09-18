@@ -12,7 +12,11 @@ it('looks a participant up by its scheme and value', function (): void {
             'identifier' => 'gb123456789',
             'registered' => true,
             'capabilities' => [
-                ['document_type' => 'urn:oasis:names:specification:ubl:schema:xsd:Invoice-2::Invoice'],
+                [
+                    'name' => 'Peppol BIS Billing 3.0 Invoice',
+                    'document_type_id' => 'urn:oasis:names:specification:ubl:schema:xsd:Invoice-2::Invoice##urn:cen.eu:en16931:2017…',
+                    'process_id' => 'urn:fdc:peppol.eu:2017:poacc:billing:01:1.0',
+                ],
             ],
             'directory' => null,
             'checked_at' => '2026-09-18T09:00:00.000Z',
@@ -27,8 +31,9 @@ it('looks a participant up by its scheme and value', function (): void {
     expect($participant->registered)->toBeTrue()
         ->and($participant->identifier)->toBe('gb123456789')
         ->and($participant->directory)->toBeNull()
+        ->and($participant->capabilities[0]->name)->toBe('Peppol BIS Billing 3.0 Invoice')
         ->and($participant->accepts('Invoice-2::Invoice'))->toBeTrue()
-        ->and($participant->accepts('Order-2::Order'))->toBeFalse();
+        ->and($participant->accepts('CreditNote-2::CreditNote'))->toBeFalse();
 });
 
 it('reads an unregistered participant as an answer', function (): void {

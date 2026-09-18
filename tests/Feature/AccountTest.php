@@ -27,25 +27,27 @@ it('reads usage as meters', function (): void {
             'plan' => 'developer',
             'period_start' => '2026-09-01T00:00:00.000Z',
             'period_end' => '2026-10-01T00:00:00.000Z',
-            'documents' => ['included' => 1000, 'used' => 250, 'remaining' => 750],
-            'lookups' => ['included' => 500, 'used' => 500, 'remaining' => 0],
+            'documents' => ['included' => 1000, 'used' => 250, 'overage' => 0],
+            'lookups' => ['included' => 500, 'used' => 620, 'overage' => 120],
         ],
     ]);
 
     $usage = client($http)->usage()->get();
 
     expect($usage->plan)->toBe('developer')
-        ->and($usage->documents->remaining)->toBe(750)
+        ->and($usage->documents->remaining())->toBe(750)
         ->and($usage->documents->fraction())->toBe(0.25)
+        ->and($usage->lookups->overage)->toBe(120)
+        ->and($usage->lookups->remaining())->toBe(0)
         ->and($usage->lookups->fraction())->toBe(1.0);
 });
 
-it('works out what is left when the API does not say', function (): void {
+it('works out what is left, which the API does not send', function (): void {
     $http = http()->queue([
-        'data' => ['documents' => ['included' => 100, 'used' => 30], 'lookups' => []],
+        'data' => ['documents' => ['included' => 100, 'used' => 30, 'overage' => 0], 'lookups' => []],
     ]);
 
-    expect(client($http)->usage()->get()->documents->remaining)->toBe(70);
+    expect(client($http)->usage()->get()->documents->remaining())->toBe(70);
 });
 
 it('creates a key and hands back the secret once', function (): void {
