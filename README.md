@@ -12,6 +12,8 @@ wraps this package in a service provider, a config file and a testing fake.
 
 ## Install
 
+Requires PHP 8.4 or newer.
+
 ```bash
 composer require einvoicing/sdk
 ```
