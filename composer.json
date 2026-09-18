@@ -1,0 +1,54 @@
+{
+    "name": "einvoicing/sdk",
+    "description": "PHP client for the einvoicing.dev API: validate, convert and look up Peppol e-invoices.",
+    "keywords": ["peppol", "e-invoicing", "en16931", "ubl", "invoice", "vat"],
+    "homepage": "https://www.einvoicing.dev",
+    "license": "MIT",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Steve McDougall",
+            "email": "juststevemcd@gmail.com",
+            "homepage": "https://www.juststeveking.com"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/JustSteveKing/einvoicing-php/issues",
+        "docs": "https://www.einvoicing.dev/docs"
+    },
+    "require": {
+        "php": "^8.3",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.0",
+        "psr/http-message": "^2.0"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.18",
+        "nyholm/psr7": "^1.8",
+        "pestphp/pest": "^3.5",
+        "phpstan/phpstan": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Einvoicing\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Einvoicing\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "scripts": {
+        "test": "pest",
+        "stan": "phpstan analyse",
+        "lint": "pint"
+    }
+}
