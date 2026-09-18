@@ -7,7 +7,7 @@ It brings no HTTP client of its own. You hand it a PSR-18 client and PSR-17
 factories, so it uses whatever your application already has and adds nothing
 to your dependency tree that you have not already agreed to.
 
-Using Laravel? [einvoicing/laravel](https://github.com/einvoicing/laravel)
+Using Laravel? [einvoicing/laravel](https://github.com/JustSteveKing/einvoicing-laravel)
 wraps this package in a service provider, a config file and a testing fake.
 
 ## Install
@@ -116,7 +116,7 @@ not the one you sent.
 
 ```php
 $usage = $client->usage()->get();
-$usage->documents->remaining;
+$usage->documents->remaining(); // derived; the API sends used, included, overage
 
 $key = $client->keys()->create('CI', mode: 'test');
 $key->secret; // The only time this exists. Store it now.

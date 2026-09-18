@@ -1,19 +1,26 @@
 {
     "name": "einvoicing/sdk",
     "description": "PHP client for the einvoicing.dev API: validate, convert and look up Peppol e-invoices.",
-    "keywords": ["peppol", "e-invoicing", "en16931", "ubl", "invoice", "vat"],
+    "keywords": [
+        "peppol",
+        "e-invoicing",
+        "en16931",
+        "ubl",
+        "invoice",
+        "vat"
+    ],
     "homepage": "https://www.einvoicing.dev",
     "license": "MIT",
     "type": "library",
     "authors": [
         {
             "name": "Steve McDougall",
-            "email": "juststevemcd@gmail.com",
             "homepage": "https://www.juststeveking.com"
         }
     ],
     "support": {
         "issues": "https://github.com/JustSteveKing/einvoicing-php/issues",
+        "source": "https://github.com/JustSteveKing/einvoicing-php",
         "docs": "https://www.einvoicing.dev/docs"
     },
     "require": {
