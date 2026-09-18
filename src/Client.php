@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Einvoicing;
 
+use Composer\InstalledVersions;
 use Einvoicing\Exceptions\NoHttpClientException;
 use Einvoicing\Exceptions\ProblemException;
 use Einvoicing\Exceptions\TransportException;
@@ -19,6 +20,7 @@ use Http\Discovery\Exception as DiscoveryException;
 use Http\Discovery\Psr17FactoryDiscovery;
 use Http\Discovery\Psr18ClientDiscovery;
 use JsonException;
+use OutOfBoundsException;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
@@ -41,7 +43,14 @@ use RuntimeException;
  */
 final class Client
 {
-    public const string VERSION = '0.1.0';
+    /**
+     * What to call this client when composer cannot say.
+     *
+     * Only a fallback: the User-Agent reports the installed version, because
+     * a hand-maintained constant drifts. This one had been claiming 0.1.0
+     * since three releases earlier.
+     */
+    public const string VERSION = '0.2.4';
 
     private readonly ClientInterface $http;
 
@@ -170,7 +179,7 @@ final class Client
         $request = $this->requests->createRequest($method, $url)
             ->withHeader('Authorization', 'Bearer '.$this->key)
             ->withHeader('Accept', 'application/json')
-            ->withHeader('User-Agent', 'einvoicing-php/'.self::VERSION);
+            ->withHeader('User-Agent', 'einvoicing-php/'.self::version());
 
         if ($body !== null) {
             $payload = is_string($body) ? $body : self::encode($body);
@@ -220,6 +229,28 @@ final class Client
         }
 
         return $decoded;
+    }
+
+    /**
+     * The installed version, so the User-Agent says something true.
+     *
+     * Composer knows what it installed; this class does not. Inside this
+     * repository that answers "dev-main", which is also true.
+     */
+    private static function version(): string
+    {
+        if (! class_exists(InstalledVersions::class)) {
+            return self::VERSION;
+        }
+
+        try {
+            $version = InstalledVersions::getPrettyVersion('einvoicing/sdk');
+        } catch (OutOfBoundsException) {
+            // Not installed as a package: a checkout, or a bespoke autoloader.
+            return self::VERSION;
+        }
+
+        return $version === null ? self::VERSION : ltrim($version, 'v');
     }
 
     /**

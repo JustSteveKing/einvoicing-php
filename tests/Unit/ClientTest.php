@@ -20,7 +20,9 @@ it('identifies itself on every request', function (): void {
     client($http)->account()->get();
 
     $request = $http->lastRequest();
-    expect($request->getHeaderLine('User-Agent'))->toBe('einvoicing-php/'.Client::VERSION)
+    // Whatever composer installed, never the hardcoded fallback drifting.
+    expect($request->getHeaderLine('User-Agent'))->toStartWith('einvoicing-php/')
+        ->and($request->getHeaderLine('User-Agent'))->not->toBe('einvoicing-php/')
         ->and($request->getHeaderLine('Accept'))->toBe('application/json');
 });
 
@@ -102,4 +104,16 @@ it('still lets one piece be overridden while the rest is discovered', function (
 
     expect($client->account()->get()->email)->toBe('steve@example.com')
         ->and($http->lastRequest()->getHeaderLine('Authorization'))->toBe('Bearer sk_test');
+});
+
+it('reports the version composer installed, not a constant someone forgot', function (): void {
+    $http = http()->queue(['data' => []]);
+
+    client($http)->account()->get();
+
+    $agent = $http->lastRequest()->getHeaderLine('User-Agent');
+
+    // Inside this repository composer answers dev-main, which is the truth.
+    // In an install it is the tag. Either way it is not a stale literal.
+    expect($agent)->toBe('einvoicing-php/'.Composer\InstalledVersions::getPrettyVersion('einvoicing/sdk'));
 });
