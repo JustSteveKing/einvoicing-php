@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: PHP ${{ matrix.php }}${{ matrix.dependencies == 'lowest' && ' (lowest)' || '' }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4', '8.5']
+        dependencies: [highest]
+        include:
+          # The constraints claim to support old versions; this is what finds
+          # out. A package that only works against the newest of everything
+          # has lied in its composer.json.
+          - php: '8.3'
+            dependencies: lowest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - uses: ramsey/composer-install@v4
+        with:
+          dependency-versions: ${{ matrix.dependencies }}
+
+      - run: vendor/bin/pest
+
+  quality:
+    name: Static analysis and style
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - uses: ramsey/composer-install@v4
+
+      - name: composer.json is publishable
+        run: composer validate --strict
+
+      - run: vendor/bin/phpstan analyse --no-progress
+
+      - run: vendor/bin/pint --test
