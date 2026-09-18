@@ -16,12 +16,27 @@ wraps this package in a service provider, a config file and a testing fake.
 composer require einvoicing/sdk
 ```
 
-If you have no PSR-18 client or PSR-17 factories yet, composer will say so
-rather than letting it fail at runtime. Any pair will do:
+You also need a PSR-18 client and PSR-17 factories. If you allow the discovery
+plugin, composer installs a pair for you the first time:
+
+```json
+{
+    "config": {
+        "allow-plugins": { "php-http/discovery": true }
+    }
+}
+```
+
+Composer asks about that on install; answering yes is enough. If you would
+rather choose, install any pair yourself and the plugin leaves it alone:
 
 ```bash
 composer require symfony/http-client nyholm/psr7
 ```
+
+Skip both and nothing fails at install time — `php-http/discovery` satisfies
+the implementation requirement on paper — but the first request throws
+`NoHttpClientException`.
 
 ## Getting started
 
