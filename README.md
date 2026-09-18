@@ -3,9 +3,9 @@
 PHP client for the [einvoicing.dev](https://www.einvoicing.dev) API: validate,
 convert and look up Peppol e-invoices.
 
-It brings no HTTP client of its own. You hand it a PSR-18 client and PSR-17
-factories, so it uses whatever your application already has and adds nothing
-to your dependency tree that you have not already agreed to.
+It brings no HTTP client of its own. It discovers the PSR-18 client and PSR-17
+factories you already have, so it uses whatever is in your application and
+adds nothing to your dependency tree that you have not already agreed to.
 
 Using Laravel? [einvoicing/laravel](https://github.com/JustSteveKing/einvoicing-laravel)
 wraps this package in a service provider, a config file and a testing fake.
@@ -16,30 +16,40 @@ wraps this package in a service provider, a config file and a testing fake.
 composer require einvoicing/sdk
 ```
 
-Plus an HTTP client and factories, if you do not already have them:
+If you have no PSR-18 client or PSR-17 factories yet, composer will say so
+rather than letting it fail at runtime. Any pair will do:
 
 ```bash
-composer require nyholm/psr7 symfony/http-client
+composer require symfony/http-client nyholm/psr7
 ```
 
 ## Getting started
 
 ```php
 use Einvoicing\Client;
-use Nyholm\Psr7\Factory\Psr17Factory;
-use Symfony\Component\HttpClient\Psr18Client;
 
-$psr17 = new Psr17Factory();
+$client = new Client(getenv('EINVOICING_API_KEY'));
+```
 
+That is the whole setup. The HTTP client and factories are discovered from
+what is installed, via `php-http/discovery`.
+
+Pass any of them to take over — a framework's container should, and it is how
+you put a fake under a test:
+
+```php
 $client = new Client(
-    http: new Psr18Client(),
-    requests: $psr17,
-    streams: $psr17,
     key: getenv('EINVOICING_API_KEY'),
+    http: $myClient,        // any PSR-18 client
+    requests: $myFactory,   // any PSR-17 request factory
+    streams: $myFactory,    // any PSR-17 stream factory
+    baseUrl: 'http://localhost:8787',
 );
 ```
 
-The base URL is a fifth argument, for pointing at a local instance.
+Give one and the rest is still discovered. If nothing can be found and nothing
+was passed, the constructor throws `NoHttpClientException` naming what to
+install.
 
 ## Validating a document
 
@@ -144,14 +154,21 @@ class:
 | `InvalidInvoiceException` | A conversion could not produce a valid document; `findings()` say why |
 | `ProblemException` | Anything else the API reported |
 | `TransportException` | The request never got an answer |
+| `NoHttpClientException` | No PSR-18 client or PSR-17 factory could be found |
 
 Branch on `$e->type` or `$e->slug()`, which are stable. Never on the title or
 the detail: those are prose for a human reading a log, and they change.
 
 ## Testing
 
-Pass a PSR-18 client that answers from a fixture. There is nothing else to
-mock — the client holds no global state and reaches for nothing on its own.
+Pass a PSR-18 client that answers from a fixture; the factories can still be
+discovered:
+
+```php
+$client = new Client('sk_test', http: $fakeClient);
+```
+
+There is nothing else to mock — the client holds no global state.
 
 ## Development
 

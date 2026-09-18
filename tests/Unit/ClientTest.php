@@ -9,8 +9,10 @@ use Einvoicing\Tests\Support\FakeHttpClient;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
+use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\StreamFactoryInterface;
 
 it('identifies itself on every request', function (): void {
     $http = http()->queue(['data' => []]);
@@ -26,7 +28,7 @@ it('can be pointed somewhere else', function (): void {
     $http = (new FakeHttpClient)->queue(['data' => []]);
     $psr17 = new Psr17Factory;
 
-    $client = new Client($http, $psr17, $psr17, 'sk_test', 'http://localhost:8787');
+    $client = new Client('sk_test', $http, $psr17, $psr17, 'http://localhost:8787');
     $client->account()->get();
 
     expect((string) $http->lastRequest()->getUri())->toBe('http://localhost:8787/v1/account');
@@ -45,7 +47,7 @@ it('wraps a transport failure rather than leaking the implementation', function 
     };
 
     $psr17 = new Psr17Factory;
-    $client = new Client($broken, $psr17, $psr17, 'sk_test');
+    $client = new Client('sk_test', $broken, $psr17, $psr17);
 
     expect(fn () => $client->account()->get())
         ->toThrow(TransportException::class, 'Connection refused');
@@ -73,4 +75,31 @@ it('raises a problem even when the body is not a problem document', function ():
 
     expect(fn () => client($http)->account()->get())
         ->toThrow(ProblemException::class, 'The request failed.');
+});
+
+it('discovers the HTTP client and factories when none are given', function (): void {
+    // Nothing is wired up here. symfony/http-client and nyholm/psr7 are
+    // installed, so php-http/discovery should find both without being told.
+    $client = new Client('sk_test');
+
+    expect($client)->toBeInstanceOf(Client::class);
+
+    $reflected = new ReflectionClass($client);
+
+    expect($reflected->getProperty('http')->getValue($client))
+        ->toBeInstanceOf(ClientInterface::class)
+        ->and($reflected->getProperty('requests')->getValue($client))
+        ->toBeInstanceOf(RequestFactoryInterface::class)
+        ->and($reflected->getProperty('streams')->getValue($client))
+        ->toBeInstanceOf(StreamFactoryInterface::class);
+});
+
+it('still lets one piece be overridden while the rest is discovered', function (): void {
+    $http = (new FakeHttpClient)->queue(['data' => ['email' => 'steve@example.com']]);
+
+    // Only the transport is given; the factories are found.
+    $client = new Client('sk_test', http: $http);
+
+    expect($client->account()->get()->email)->toBe('steve@example.com')
+        ->and($http->lastRequest()->getHeaderLine('Authorization'))->toBe('Bearer sk_test');
 });

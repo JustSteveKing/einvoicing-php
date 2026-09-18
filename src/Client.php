@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Einvoicing;
 
+use Einvoicing\Exceptions\NoHttpClientException;
 use Einvoicing\Exceptions\ProblemException;
 use Einvoicing\Exceptions\TransportException;
 use Einvoicing\Resources\Account;
@@ -14,6 +15,9 @@ use Einvoicing\Resources\Participants;
 use Einvoicing\Resources\Rulesets;
 use Einvoicing\Resources\Usage;
 use Einvoicing\Resources\Validations;
+use Http\Discovery\Exception as DiscoveryException;
+use Http\Discovery\Psr17FactoryDiscovery;
+use Http\Discovery\Psr18ClientDiscovery;
 use JsonException;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
@@ -25,21 +29,59 @@ use RuntimeException;
 /**
  * The einvoicing.dev API.
  *
- * Bring your own HTTP: this takes a PSR-18 client and PSR-17 factories, so it
- * works with Guzzle, Symfony, curl or whatever your framework already has,
- * and adds no transitive dependency of its own.
+ * Bring your own HTTP, but do not wire it up unless you want to:
+ *
+ *     $client = new Client($key);
+ *
+ * The PSR-18 client and PSR-17 factories are discovered from whatever is
+ * installed, so this works with Guzzle, Symfony, curl or whatever your
+ * framework already has, and still brings no implementation of its own.
+ * Pass any of them explicitly to override the discovery — a framework's
+ * container should, and the tests here do.
  */
 final class Client
 {
     public const string VERSION = '0.1.0';
 
+    private readonly ClientInterface $http;
+
+    private readonly RequestFactoryInterface $requests;
+
+    private readonly StreamFactoryInterface $streams;
+
     public function __construct(
-        private readonly ClientInterface $http,
-        private readonly RequestFactoryInterface $requests,
-        private readonly StreamFactoryInterface $streams,
         private readonly string $key,
+        ?ClientInterface $http = null,
+        ?RequestFactoryInterface $requests = null,
+        ?StreamFactoryInterface $streams = null,
         private readonly string $baseUrl = 'https://api.einvoicing.dev',
-    ) {}
+    ) {
+        // Discovery throws when nothing is installed. That is a composer
+        // problem, not a runtime one, so say which package is missing rather
+        // than letting php-http's own wording reach the application.
+        try {
+            $this->http = $http ?? Psr18ClientDiscovery::find();
+        } catch (DiscoveryException $e) {
+            throw new NoHttpClientException(
+                message: 'No PSR-18 HTTP client was found. Install one — '
+                    .'symfony/http-client or guzzlehttp/guzzle will do — or pass '
+                    .'your own to the constructor.',
+                previous: $e,
+            );
+        }
+
+        try {
+            $this->requests = $requests ?? Psr17FactoryDiscovery::findRequestFactory();
+            $this->streams = $streams ?? Psr17FactoryDiscovery::findStreamFactory();
+        } catch (DiscoveryException $e) {
+            throw new NoHttpClientException(
+                message: 'No PSR-17 HTTP factories were found. Install an '
+                    .'implementation — nyholm/psr7 will do — or pass your own to '
+                    .'the constructor.',
+                previous: $e,
+            );
+        }
+    }
 
     public function validations(): Validations
     {
