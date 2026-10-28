@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Einvoicing\Resources;
 
+use Einvoicing\Requests\ConvertInvoice;
 use Einvoicing\Responses\Conversion;
 
 /**
@@ -25,12 +26,6 @@ final class Conversions extends Resource
         string $target = 'peppol-bis-billing-3',
         ?string $ruleset = null,
     ): Conversion {
-        $body = ['target' => $target, 'invoice' => $invoice];
-
-        if ($ruleset !== null) {
-            $body['ruleset'] = $ruleset;
-        }
-
-        return Conversion::fromArray(self::data($this->client->post('/v1/conversions', $body)));
+        return $this->client->send(new ConvertInvoice($invoice, $target, $ruleset));
     }
 }

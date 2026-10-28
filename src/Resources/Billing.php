@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Einvoicing\Resources;
 
+use Einvoicing\Requests\CreateCheckoutSession;
+use Einvoicing\Requests\CreatePortalSession;
 use Einvoicing\Responses\BillingSession;
 
 /**
@@ -16,14 +18,12 @@ final class Billing extends Resource
     /** Start a paid plan: `developer` or `pro`. */
     public function checkout(string $plan): BillingSession
     {
-        $response = $this->client->post('/v1/billing/checkout-sessions', ['plan' => $plan]);
-
-        return BillingSession::fromArray(self::data($response));
+        return $this->client->send(new CreateCheckoutSession($plan));
     }
 
     /** Open the billing portal, for changing the card, plan or invoices. */
     public function portal(): BillingSession
     {
-        return BillingSession::fromArray(self::data($this->client->post('/v1/billing/portal-sessions')));
+        return $this->client->send(new CreatePortalSession);
     }
 }

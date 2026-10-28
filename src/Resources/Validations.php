@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Einvoicing\Resources;
 
+use Einvoicing\Requests\ValidateDocument;
 use Einvoicing\Responses\ValidationReport;
 
 /**
@@ -26,14 +27,7 @@ final class Validations extends Resource
      */
     public function validate(string $document, ?string $ruleset = null): ValidationReport
     {
-        $response = $this->client->post(
-            path: '/v1/validations',
-            body: $document,
-            contentType: 'application/xml',
-            query: ['ruleset' => $ruleset],
-        );
-
-        return ValidationReport::fromArray(self::data($response));
+        return $this->client->send(new ValidateDocument($document, $ruleset));
     }
 
     /**
@@ -42,12 +36,6 @@ final class Validations extends Resource
      */
     public function validateAsJson(string $document, ?string $ruleset = null): ValidationReport
     {
-        $response = $this->client->post(
-            path: '/v1/validations',
-            body: ['document' => $document],
-            query: ['ruleset' => $ruleset],
-        );
-
-        return ValidationReport::fromArray(self::data($response));
+        return $this->client->send(new ValidateDocument($document, $ruleset, asJson: true));
     }
 }

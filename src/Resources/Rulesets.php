@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Einvoicing\Resources;
 
+use Einvoicing\Requests\ListRulesets;
 use Einvoicing\Responses\Ruleset;
 
 /**
@@ -18,10 +19,7 @@ final class Rulesets extends Resource
     /** @return list<Ruleset> */
     public function all(): array
     {
-        return array_map(
-            static fn (array $ruleset): Ruleset => Ruleset::fromArray($ruleset),
-            self::collection($this->client->get('/v1/rulesets')),
-        );
+        return $this->client->send(new ListRulesets);
     }
 
     /** The one in force today, if the API names one. */

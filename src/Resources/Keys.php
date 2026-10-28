@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Einvoicing\Resources;
 
+use Einvoicing\Requests\CreateKey;
+use Einvoicing\Requests\ListKeys;
+use Einvoicing\Requests\RevokeKey;
 use Einvoicing\Responses\ApiKey;
 use Einvoicing\Responses\NewApiKey;
 
@@ -16,10 +19,7 @@ final class Keys extends Resource
     /** @return list<ApiKey> */
     public function all(): array
     {
-        return array_map(
-            static fn (array $key): ApiKey => ApiKey::fromArray($key),
-            self::collection($this->client->get('/v1/keys')),
-        );
+        return $this->client->send(new ListKeys);
     }
 
     /**
@@ -33,18 +33,12 @@ final class Keys extends Resource
      */
     public function create(string $name, string $mode = 'live', ?string $expiresAt = null): NewApiKey
     {
-        $body = ['name' => $name, 'mode' => $mode];
-
-        if ($expiresAt !== null) {
-            $body['expires_at'] = $expiresAt;
-        }
-
-        return NewApiKey::fromArray(self::data($this->client->post('/v1/keys', $body)));
+        return $this->client->send(new CreateKey($name, $mode, $expiresAt));
     }
 
     /** Revoke a key. It stops working immediately, and there is no undo. */
     public function revoke(string $id): void
     {
-        $this->client->delete('/v1/keys/'.rawurlencode($id));
+        $this->client->send(new RevokeKey($id));
     }
 }

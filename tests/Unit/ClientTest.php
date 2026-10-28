@@ -9,10 +9,8 @@ use Einvoicing\Tests\Support\FakeHttpClient;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
-use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
-use Psr\Http\Message\StreamFactoryInterface;
 
 it('identifies itself on every request', function (): void {
     $http = http()->queue(['data' => []]);
@@ -84,16 +82,9 @@ it('discovers the HTTP client and factories when none are given', function (): v
     // installed, so php-http/discovery should find both without being told.
     $client = new Client('sk_test');
 
-    expect($client)->toBeInstanceOf(Client::class);
+    $http = $client->__debugInfo()['http'];
 
-    $reflected = new ReflectionClass($client);
-
-    expect($reflected->getProperty('http')->getValue($client))
-        ->toBeInstanceOf(ClientInterface::class)
-        ->and($reflected->getProperty('requests')->getValue($client))
-        ->toBeInstanceOf(RequestFactoryInterface::class)
-        ->and($reflected->getProperty('streams')->getValue($client))
-        ->toBeInstanceOf(StreamFactoryInterface::class);
+    expect(is_string($http) && is_subclass_of($http, ClientInterface::class))->toBeTrue();
 });
 
 it('still lets one piece be overridden while the rest is discovered', function (): void {
@@ -115,5 +106,40 @@ it('reports the version composer installed, not a constant someone forgot', func
 
     // Inside this repository composer answers dev-main, which is the truth.
     // In an install it is the tag. Either way it is not a stale literal.
-    expect($agent)->toBe('einvoicing-php/'.Composer\InstalledVersions::getPrettyVersion('einvoicing/sdk'));
+    // The toolbox adds its own name and PHP's after it.
+    expect($agent)->toStartWith('einvoicing-php/'.Composer\InstalledVersions::getPrettyVersion('einvoicing/sdk').' sdk-toolbox/');
+});
+
+it('retries a read the API was briefly unable to answer', function (): void {
+    $http = http()->queue(['type' => 'about:blank', 'title' => 'Unavailable'], 503, ['Retry-After' => '0'])->queue(['data' => ['email' => 'steve@example.com']]);
+    $psr17 = new Psr17Factory;
+
+    $client = new Client('sk_test', $http, $psr17, $psr17);
+
+    expect($client->account()->get()->email)->toBe('steve@example.com')
+        ->and($http->requests)->toHaveCount(2);
+});
+
+it('never retries a conversion that may have landed', function (): void {
+    $http = http()->queue(['title' => 'Bad gateway'], 502);
+    $psr17 = new Psr17Factory;
+
+    expect(fn () => new Client('sk_test', $http, $psr17, $psr17)->conversions()->convert(['number' => 'INV-1']))
+        ->toThrow(ProblemException::class, 'Bad gateway');
+    expect($http->requests)->toHaveCount(1);
+});
+
+it('refuses to send the key over plain HTTP to anything but this machine', function (): void {
+    expect(fn () => new Client('sk_test', http(), baseUrl: 'http://api.einvoicing.dev'))
+        ->toThrow(JustSteveKing\SdkToolbox\Errors\InvalidRequestException::class);
+});
+
+it('keeps the key out of exceptions', function (): void {
+    $http = http()->queue(['type' => 'https://www.einvoicing.dev/problems/unauthenticated', 'title' => 'No.', 'status' => 401], 401);
+
+    try {
+        client($http)->account()->get();
+    } catch (ProblemException $e) {
+        expect(print_r($e, true))->not->toContain('sk_test_example');
+    }
 });

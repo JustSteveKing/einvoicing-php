@@ -24,14 +24,15 @@
         "docs": "https://www.einvoicing.dev/docs"
     },
     "require": {
-        "php": "^8.4",
+        "php": "^8.5",
         "composer-runtime-api": "^2.0",
         "php-http/discovery": "^1.20",
         "psr/http-client": "^1.0",
         "psr/http-client-implementation": "^1.0",
         "psr/http-factory": "^1.0",
         "psr/http-factory-implementation": "^1.0",
-        "psr/http-message": "^2.0"
+        "psr/http-message": "^2.0",
+        "juststeveking/sdk-toolbox": "@dev"
     },
     "require-dev": {
         "laravel/pint": "^1.18",
@@ -63,5 +64,14 @@
         "test": "pest",
         "stan": "phpstan analyse",
         "lint": "pint"
-    }
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../sdk-toolbox",
+            "options": {
+                "symlink": true
+            }
+        }
+    ]
 }

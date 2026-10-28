@@ -6,7 +6,7 @@ namespace Einvoicing;
 
 use Composer\InstalledVersions;
 use Einvoicing\Exceptions\NoHttpClientException;
-use Einvoicing\Exceptions\ProblemException;
+use Einvoicing\Exceptions\Problems;
 use Einvoicing\Exceptions\TransportException;
 use Einvoicing\Resources\Account;
 use Einvoicing\Resources\Billing;
@@ -17,16 +17,18 @@ use Einvoicing\Resources\Rulesets;
 use Einvoicing\Resources\Usage;
 use Einvoicing\Resources\Validations;
 use Http\Discovery\Exception as DiscoveryException;
-use Http\Discovery\Psr17FactoryDiscovery;
-use Http\Discovery\Psr18ClientDiscovery;
-use JsonException;
+use JustSteveKing\SdkToolbox\Auth\BearerToken;
+use JustSteveKing\SdkToolbox\Connector;
+use JustSteveKing\SdkToolbox\Errors\TransportException as NoResponse;
+use JustSteveKing\SdkToolbox\Requests\Request;
+use JustSteveKing\SdkToolbox\Retries\RetryPolicy;
+use JustSteveKing\SdkToolbox\Retries\RetryStrategy;
 use OutOfBoundsException;
-use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
-use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamFactoryInterface;
-use RuntimeException;
+use Psr\Log\LoggerInterface;
+use SensitiveParameter;
 
 /**
  * The einvoicing.dev API.
@@ -40,8 +42,12 @@ use RuntimeException;
  * framework already has, and still brings no implementation of its own.
  * Pass any of them explicitly to override the discovery — a framework's
  * container should, and the tests here do.
+ *
+ * Built on juststeveking/sdk-toolbox, which brings retries that only repeat
+ * what is safe to repeat, RFC 9457 problems read properly, and credentials
+ * kept out of every exception and log line.
  */
-final class Client
+final class Client extends Connector
 {
     /**
      * What to call this client when composer cannot say.
@@ -52,41 +58,39 @@ final class Client
      */
     public const string VERSION = '0.2.4';
 
-    private readonly ClientInterface $http;
-
-    private readonly RequestFactoryInterface $requests;
-
-    private readonly StreamFactoryInterface $streams;
-
     public function __construct(
-        private readonly string $key,
+        #[SensitiveParameter]
+        string $key,
         ?ClientInterface $http = null,
         ?RequestFactoryInterface $requests = null,
         ?StreamFactoryInterface $streams = null,
-        private readonly string $baseUrl = 'https://api.einvoicing.dev',
+        string $baseUrl = 'https://api.einvoicing.dev',
+        RetryStrategy $retry = new RetryPolicy,
+        ?LoggerInterface $logger = null,
     ) {
         // Discovery throws when nothing is installed. That is a composer
-        // problem, not a runtime one, so say which package is missing rather
-        // than letting php-http's own wording reach the application.
+        // problem, not a runtime one, so say which packages are missing
+        // rather than letting php-http's own wording reach the application.
         try {
-            $this->http = $http ?? Psr18ClientDiscovery::find();
-        } catch (DiscoveryException $e) {
-            throw new NoHttpClientException(
-                message: 'No PSR-18 HTTP client was found. Install one — '
-                    .'symfony/http-client or guzzlehttp/guzzle will do — or pass '
-                    .'your own to the constructor.',
-                previous: $e,
+            parent::__construct(
+                baseUri: $baseUrl,
+                auth: new BearerToken($key),
+                http: $http,
+                headers: ['Accept' => 'application/json'],
+                userAgent: 'einvoicing-php/'.self::version(),
+                exceptions: new Problems,
+                requests: $requests,
+                streams: $streams,
+                // Plain HTTP only to this machine, for a local server.
+                insecure: in_array(parse_url($baseUrl, PHP_URL_HOST), ['localhost', '127.0.0.1', '[::1]'], true),
+                retry: $retry,
+                logger: $logger,
             );
-        }
-
-        try {
-            $this->requests = $requests ?? Psr17FactoryDiscovery::findRequestFactory();
-            $this->streams = $streams ?? Psr17FactoryDiscovery::findStreamFactory();
         } catch (DiscoveryException $e) {
             throw new NoHttpClientException(
-                message: 'No PSR-17 HTTP factories were found. Install an '
-                    .'implementation — nyholm/psr7 will do — or pass your own to '
-                    .'the constructor.',
+                message: 'No PSR-18 HTTP client or PSR-17 factories were found. Install '
+                    .'them — symfony/http-client and nyholm/psr7 will do — or pass '
+                    .'your own to the constructor.',
                 previous: $e,
             );
         }
@@ -133,102 +137,21 @@ final class Client
     }
 
     /**
-     * @param  array<string, scalar|null>  $query
-     * @return array<string, mixed>
+     * Every exception this package throws implements EinvoicingException,
+     * a failure to get any answer included.
+     *
+     * @template TResult
+     *
+     * @param  Request<TResult>  $request
+     * @return TResult
      */
-    public function get(string $path, array $query = []): array
+    public function send(Request $request): mixed
     {
-        return $this->send('GET', $path, $query);
-    }
-
-    /**
-     * @param  array<string, mixed>|string  $body  An array is sent as JSON; a
-     *                                             string is sent as it is,
-     *                                             which is how XML gets in.
-     * @param  array<string, scalar|null>  $query
-     * @return array<string, mixed>
-     */
-    public function post(string $path, array|string $body = [], string $contentType = 'application/json', array $query = []): array
-    {
-        return $this->send('POST', $path, query: $query, body: $body, contentType: $contentType);
-    }
-
-    public function delete(string $path): void
-    {
-        $this->send('DELETE', $path);
-    }
-
-    /**
-     * @param  array<string, scalar|null>  $query
-     * @param  array<string, mixed>|string|null  $body
-     * @return array<string, mixed>
-     */
-    private function send(
-        string $method,
-        string $path,
-        array $query = [],
-        array|string|null $body = null,
-        string $contentType = 'application/json',
-    ): array {
-        $url = $this->baseUrl.$path;
-
-        if ($query !== []) {
-            $url .= '?'.http_build_query(array_filter($query, static fn (mixed $value): bool => $value !== null));
-        }
-
-        $request = $this->requests->createRequest($method, $url)
-            ->withHeader('Authorization', 'Bearer '.$this->key)
-            ->withHeader('Accept', 'application/json')
-            ->withHeader('User-Agent', 'einvoicing-php/'.self::version());
-
-        if ($body !== null) {
-            $payload = is_string($body) ? $body : self::encode($body);
-
-            $request = $request
-                ->withHeader('Content-Type', $contentType)
-                ->withBody($this->streams->createStream($payload));
-        }
-
         try {
-            $response = $this->http->sendRequest($request);
-        } catch (ClientExceptionInterface $e) {
-            throw new TransportException(
-                message: "The request to {$url} could not be sent: {$e->getMessage()}",
-                previous: $e,
-            );
+            return parent::send($request);
+        } catch (NoResponse $e) {
+            throw new TransportException($e->getMessage(), previous: $e);
         }
-
-        return $this->decode($response);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function decode(ResponseInterface $response): array
-    {
-        $status = $response->getStatusCode();
-        $contents = (string) $response->getBody();
-
-        // 204, and anything else with nothing to say.
-        if ($contents === '') {
-            $decoded = [];
-        } else {
-            try {
-                /** @var array<string, mixed> $decoded */
-                $decoded = (array) json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
-            } catch (JsonException $e) {
-                throw new RuntimeException(
-                    message: "The API answered {$status} with a body that is not JSON.",
-                    previous: $e,
-                );
-            }
-        }
-
-        if ($status >= 400) {
-            throw ProblemException::fromResponse($decoded, $status);
-        }
-
-        return $decoded;
     }
 
     /**
@@ -251,17 +174,5 @@ final class Client
         }
 
         return $version === null ? self::VERSION : ltrim($version, 'v');
-    }
-
-    /**
-     * @param  array<string, mixed>  $body
-     */
-    private static function encode(array $body): string
-    {
-        try {
-            return json_encode($body, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-        } catch (JsonException $e) {
-            throw new RuntimeException('The request body could not be encoded as JSON.', previous: $e);
-        }
     }
 }

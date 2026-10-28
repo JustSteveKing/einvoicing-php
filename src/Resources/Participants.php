@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Einvoicing\Resources;
 
+use Einvoicing\Requests\FindParticipant;
 use Einvoicing\Responses\Participant;
 
 /**
@@ -22,8 +23,6 @@ final class Participants extends Resource
      */
     public function find(string $id): Participant
     {
-        $response = $this->client->get('/v1/participants/'.rawurlencode($id));
-
-        return Participant::fromArray(self::data($response));
+        return $this->client->send(new FindParticipant($id));
     }
 }
